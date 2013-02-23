@@ -155,6 +155,7 @@ gboolean Config_port(void)
 {
     struct termios termios_p;
     gchar *msg = NULL;
+    int mcs;
 
     Ferme_Port();
     remove_lockfile();
@@ -172,6 +173,9 @@ gboolean Config_port(void)
         return FALSE;
     }
 
+    // flushing is to be done after opening. This prevents first read and write to be spam'ish.
+    tcflush(serial_port_fd, TCIOFLUSH);
+
     if(create_lockfile(config.port) == -1)
     {
         Ferme_Port();
@@ -182,7 +186,12 @@ gboolean Config_port(void)
         return FALSE;
     }
 
-    tcgetattr(serial_port_fd, &termios_p);
+    if(tcgetattr(serial_port_fd, &termios_p)!=0)
+    {
+        msg = g_strdup_printf(_("tcgetattr failed!\n"));
+        show_message(msg, MSG_ERR);
+        g_free(msg);
+    }
     memcpy(&termios_save, &termios_p, sizeof(struct termios));
 
     switch(config.vitesse)
@@ -218,7 +227,9 @@ gboolean Config_port(void)
 	    termios_p.c_cflag = B115200;
 	    break;
 	case 230400:
-	    termios_p.c_cflag = B230400;
+	    /* termios_p.c_cflag = B230400; */
+      cfsetospeed(&termios_p, (speed_t)B230400);
+      cfsetispeed(&termios_p, (speed_t)B230400);
 	    break;
 
 	default:
@@ -236,33 +247,48 @@ gboolean Config_port(void)
 
     switch(config.bits)
     {
-	case 5:
-	    termios_p.c_cflag |= CS5;
-	    break;
-	case 6:
-	    termios_p.c_cflag |= CS6;
-	    break;
-	case 7:
-	    termios_p.c_cflag |= CS7;
-	    break;
-	case 8:
-	    termios_p.c_cflag |= CS8;
-	    break;
+       case 5:
+          termios_p.c_cflag = (termios_p.c_cflag & ~CSIZE) | CS5;
+          break;
+       case 6:
+          termios_p.c_cflag = (termios_p.c_cflag & ~CSIZE) | CS6;
+          break;
+       case 7:
+          termios_p.c_cflag = (termios_p.c_cflag & ~CSIZE) | CS7;
+          break;
+       case 8:
+       default:
+          termios_p.c_cflag = (termios_p.c_cflag & ~CSIZE) | CS8;
+          break;
     }
+
+    termios_p.c_cflag |= (CLOCAL | CREAD);
+
+    termios_p.c_cflag &= ~(PARENB | PARODD);
     switch(config.parite)
     {
-	case 1:
-	    termios_p.c_cflag |= PARODD | PARENB;
-	    break;
-	case 2:
-	    termios_p.c_cflag |= PARENB;
-	    break;
-	default:
-	    break;
+       case 1:
+          termios_p.c_cflag |= (PARODD | PARENB);
+          break;
+       case 2:
+          termios_p.c_cflag |= PARENB;
+          break;
+       default:
+          break;
     }
+
+    /* termios_p.c_cflag &= ~CRTSCTS; */
+
     if(config.stops == 2)
-	termios_p.c_cflag |= CSTOPB;
-    termios_p.c_cflag |= CREAD;
+    {
+       termios_p.c_cflag |= CSTOPB;
+    }
+    else
+    {
+       termios_p.c_cflag &= ~CSTOPB;
+    }
+
+    /* termios_p.c_iflag=IGNBRK; */
     termios_p.c_iflag = IGNPAR | IGNBRK;
     switch(config.flux)
     {
@@ -273,14 +299,48 @@ gboolean Config_port(void)
 	    termios_p.c_cflag |= CRTSCTS;
 	    break;
 	default:
-	    termios_p.c_cflag |= CLOCAL;
+       termios_p.c_iflag &= ~(IXON|IXOFF|IXANY);
+       termios_p.c_cflag &= ~CRTSCTS;
 	    break;
     }
     termios_p.c_oflag = 0;
     termios_p.c_lflag = 0;
     termios_p.c_cc[VTIME] = 0;
-    termios_p.c_cc[VMIN] = 1;
-    tcsetattr(serial_port_fd, TCSANOW, &termios_p);
+    termios_p.c_cc[VMIN] = 1; //1
+
+    /* tcsetattr(serial_port_fd, TCSANOW, &termios_p); */
+    if (tcsetattr(serial_port_fd, TCSANOW, &termios_p)!=0)
+    {
+       msg = g_strdup_printf(_("tcsetattr failed!"));
+       show_message(msg, MSG_ERR);
+       g_free(msg);
+    }
+
+    /* mcs=0; */
+    /* ioctl(serial_port_fd, TIOCMGET, &mcs); */
+    /* mcs |= TIOCM_RTS; */
+    /* ioctl(serial_port_fd, TIOCMSET, &mcs); */
+
+    /* if (tcgetattr(serial_port_fd, &termios_p)!=0) */
+    /* { */
+    /*    msg = g_strdup_printf(_("tcgetattr failed!")); */
+    /*    show_message(msg, MSG_ERR); */
+    /*    g_free(msg); */
+    /* } */
+
+   //hardware handshake
+    /* if (config.flux != 2) */
+    /* { */
+    /*    termios_p.c_cflag &= ~CRTSCTS; */
+    /* } */
+
+    /* if (tcsetattr(serial_port_fd, TCSANOW, &termios_p)!=0) */
+    /* { */
+    /*    msg = g_strdup_printf(_("tcsetattr failed!")); */
+    /*    show_message(msg, MSG_ERR); */
+    /*    g_free(msg); */
+    /* } */
+
     tcflush(serial_port_fd, TCOFLUSH);
     tcflush(serial_port_fd, TCIFLUSH);
 
