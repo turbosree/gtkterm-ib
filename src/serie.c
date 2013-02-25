@@ -228,8 +228,8 @@ gboolean Config_port(void)
 	    break;
 	case 230400:
 	    /* termios_p.c_cflag = B230400; */
-      cfsetospeed(&termios_p, (speed_t)B230400);
-      cfsetispeed(&termios_p, (speed_t)B230400);
+       cfsetospeed(&termios_p, (speed_t)B230400);
+       cfsetispeed(&termios_p, (speed_t)B230400);
 	    break;
 
 	default:
@@ -277,8 +277,6 @@ gboolean Config_port(void)
           break;
     }
 
-    /* termios_p.c_cflag &= ~CRTSCTS; */
-
     if(config.stops == 2)
     {
        termios_p.c_cflag |= CSTOPB;
@@ -288,7 +286,6 @@ gboolean Config_port(void)
        termios_p.c_cflag &= ~CSTOPB;
     }
 
-    /* termios_p.c_iflag=IGNBRK; */
     termios_p.c_iflag = IGNPAR | IGNBRK;
     switch(config.flux)
     {
@@ -308,38 +305,12 @@ gboolean Config_port(void)
     termios_p.c_cc[VTIME] = 0;
     termios_p.c_cc[VMIN] = 1; //1
 
-    /* tcsetattr(serial_port_fd, TCSANOW, &termios_p); */
     if (tcsetattr(serial_port_fd, TCSANOW, &termios_p)!=0)
     {
        msg = g_strdup_printf(_("tcsetattr failed!"));
        show_message(msg, MSG_ERR);
        g_free(msg);
     }
-
-    /* mcs=0; */
-    /* ioctl(serial_port_fd, TIOCMGET, &mcs); */
-    /* mcs |= TIOCM_RTS; */
-    /* ioctl(serial_port_fd, TIOCMSET, &mcs); */
-
-    /* if (tcgetattr(serial_port_fd, &termios_p)!=0) */
-    /* { */
-    /*    msg = g_strdup_printf(_("tcgetattr failed!")); */
-    /*    show_message(msg, MSG_ERR); */
-    /*    g_free(msg); */
-    /* } */
-
-   //hardware handshake
-    /* if (config.flux != 2) */
-    /* { */
-    /*    termios_p.c_cflag &= ~CRTSCTS; */
-    /* } */
-
-    /* if (tcsetattr(serial_port_fd, TCSANOW, &termios_p)!=0) */
-    /* { */
-    /*    msg = g_strdup_printf(_("tcsetattr failed!")); */
-    /*    show_message(msg, MSG_ERR); */
-    /*    g_free(msg); */
-    /* } */
 
     tcflush(serial_port_fd, TCOFLUSH);
     tcflush(serial_port_fd, TCIFLUSH);
